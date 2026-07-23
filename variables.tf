@@ -4,45 +4,25 @@ variable "location" {
   nullable    = false
 }
 
-variable "name" {
+variable "parent_id" {
   type        = string
-  description = "The name of the this resource."
+  description = "The resource ID of the resource group where the Microsoft Purview account will be deployed."
+  nullable    = false
 
   validation {
-    condition     = can(regex("TODO", var.name))
-    error_message = "The name must be TODO." # TODO remove the example below once complete:
-    #condition     = can(regex("^[a-z0-9]{5,50}$", var.name))
-    #error_message = "The name must be between 5 and 50 characters long and can only contain lowercase letters and numbers."
+    condition     = can(provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id))
+    error_message = "The parent_id must be a valid resource group resource ID."
   }
 }
 
-# This is required for most resource modules
-variable "resource_group_name" {
+variable "name" {
   type        = string
-  description = "The resource group where the resources will be deployed."
-}
+  description = "The name of the Microsoft Purview account."
 
-# required AVM interfaces
-# remove only if not supported by the resource
-# tflint-ignore: terraform_unused_declarations
-variable "customer_managed_key" {
-  type = object({
-    key_vault_resource_id = string
-    key_name              = string
-    key_version           = optional(string, null)
-    user_assigned_identity = optional(object({
-      resource_id = string
-    }), null)
-  })
-  default     = null
-  description = <<DESCRIPTION
-A map describing customer-managed keys to associate with the resource. This includes the following properties:
-- `key_vault_resource_id` - The resource ID of the Key Vault where the key is stored.
-- `key_name` - The name of the key.
-- `key_version` - (Optional) The version of the key. If not specified, the latest version is used.
-- `user_assigned_identity` - (Optional) An object representing a user-assigned identity with the following properties:
-  - `resource_id` - The resource ID of the user-assigned identity.
-DESCRIPTION
+  validation {
+    condition     = can(regex("^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$", var.name)) && length(var.name) >= 3 && length(var.name) <= 63
+    error_message = "The name must be between 3 and 63 characters long, contain only letters, numbers, and hyphens, and cannot start or end with a hyphen."
+  }
 }
 
 variable "diagnostic_settings" {
@@ -56,11 +36,10 @@ variable "diagnostic_settings" {
     storage_account_resource_id              = optional(string, null)
     event_hub_authorization_rule_resource_id = optional(string, null)
     event_hub_name                           = optional(string, null)
-    marketplace_partner_resource_id          = optional(string, null)
   }))
   default     = {}
   description = <<DESCRIPTION
-A map of diagnostic settings to create on the Key Vault. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
 
 - `name` - (Optional) The name of the diagnostic setting. One will be generated if not set, however this will not be unique if you want to create multiple diagnostic setting resources.
 - `log_categories` - (Optional) A set of log categories to send to the log analytics workspace. Defaults to `[]`.
@@ -71,7 +50,6 @@ A map of diagnostic settings to create on the Key Vault. The map key is delibera
 - `storage_account_resource_id` - (Optional) The resource ID of the storage account to send logs and metrics to.
 - `event_hub_authorization_rule_resource_id` - (Optional) The resource ID of the event hub authorization rule to send logs and metrics to.
 - `event_hub_name` - (Optional) The name of the event hub. If none is specified, the default event hub will be selected.
-- `marketplace_partner_resource_id` - (Optional) The full ARM resource ID of the Marketplace resource to which you would like to send Diagnostic LogsLogs.
 DESCRIPTION
   nullable    = false
 
@@ -83,10 +61,10 @@ DESCRIPTION
     condition = alltrue(
       [
         for _, v in var.diagnostic_settings :
-        v.workspace_resource_id != null || v.storage_account_resource_id != null || v.event_hub_authorization_rule_resource_id != null || v.marketplace_partner_resource_id != null
+        v.workspace_resource_id != null || v.storage_account_resource_id != null || v.event_hub_authorization_rule_resource_id != null
       ]
     )
-    error_message = "At least one of `workspace_resource_id`, `storage_account_resource_id`, `marketplace_partner_resource_id`, or `event_hub_authorization_rule_resource_id`, must be set."
+    error_message = "At least one of `workspace_resource_id`, `storage_account_resource_id`, or `event_hub_authorization_rule_resource_id`, must be set."
   }
 }
 
@@ -126,7 +104,9 @@ variable "managed_identities" {
     system_assigned            = optional(bool, false)
     user_assigned_resource_ids = optional(set(string), [])
   })
-  default     = {}
+  default = {
+    system_assigned = true
+  }
   description = <<DESCRIPTION
 Controls the Managed Identity configuration on this resource. The following properties can be specified:
 
@@ -134,6 +114,11 @@ Controls the Managed Identity configuration on this resource. The following prop
 - `user_assigned_resource_ids` - (Optional) Specifies a list of User Assigned Managed Identity resource IDs to be assigned to this resource.
 DESCRIPTION
   nullable    = false
+
+  validation {
+    condition     = !(var.managed_identities.system_assigned && length(var.managed_identities.user_assigned_resource_ids) > 0)
+    error_message = "Microsoft Purview accounts using the stable default API support either system-assigned or user-assigned identity, not both."
+  }
 }
 
 variable "private_endpoints" {
@@ -147,6 +132,7 @@ variable "private_endpoints" {
       condition                              = optional(string, null)
       condition_version                      = optional(string, null)
       delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
     })), {})
     lock = optional(object({
       kind = string
@@ -159,6 +145,7 @@ variable "private_endpoints" {
     application_security_group_associations = optional(map(string), {})
     private_service_connection_name         = optional(string, null)
     network_interface_name                  = optional(string, null)
+    subresource_name                        = optional(string, "account")
     location                                = optional(string, null)
     resource_group_name                     = optional(string, null)
     ip_configurations = optional(map(object({
@@ -180,6 +167,7 @@ A map of private endpoints to create on this resource. The map key is deliberate
 - `application_security_group_resource_ids` - (Optional) A map of resource IDs of application security groups to associate with the private endpoint. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
 - `private_service_connection_name` - (Optional) The name of the private service connection. One will be generated if not set.
 - `network_interface_name` - (Optional) The name of the network interface. One will be generated if not set.
+- `subresource_name` - (Optional) The Purview private link subresource name. Defaults to `account`. Use `portal` for a portal private endpoint.
 - `location` - (Optional) The Azure location where the resources will be deployed. Defaults to the location of the resource group.
 - `resource_group_name` - (Optional) The resource group where the resources will be deployed. Defaults to the resource group of this resource.
 - `ip_configurations` - (Optional) A map of IP configurations to create on the private endpoint. If not specified the platform will create one. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
@@ -227,6 +215,78 @@ A map of role assignments to create on this resource. The map key is deliberatel
 > Note: only set `skip_service_principal_aad_check` to true if you are assigning a role to a service principal.
 DESCRIPTION
   nullable    = false
+}
+
+variable "resource_types" {
+  type = object({
+    purview_account = optional(string, "Microsoft.Purview/accounts@2021-12-01")
+  })
+  default     = {}
+  description = "The Azure resource types and API versions to use for this module's AzAPI resources."
+  nullable    = false
+}
+
+variable "retry" {
+  type = object({
+    error_message_regex  = list(string)
+    interval_seconds     = optional(number)
+    max_interval_seconds = optional(number)
+  })
+  default     = null
+  description = "The retry configuration to apply to AzAPI resources."
+}
+
+variable "timeouts" {
+  type = object({
+    create = optional(string)
+    delete = optional(string)
+    read   = optional(string)
+    update = optional(string)
+  })
+  default     = null
+  description = "The timeout configuration to apply to AzAPI resources."
+}
+
+variable "public_network_access" {
+  type        = string
+  default     = "Enabled"
+  description = "The public network access setting for the Microsoft Purview account."
+  nullable    = false
+
+  validation {
+    condition     = contains(["Disabled", "Enabled", "NotSpecified"], var.public_network_access)
+    error_message = "The public network access setting must be one of: 'Disabled', 'Enabled', 'NotSpecified'."
+  }
+}
+
+variable "managed_resources_public_network_access" {
+  type        = string
+  default     = "NotSpecified"
+  description = "The public network access setting for managed resources created by the Microsoft Purview account."
+  nullable    = false
+
+  validation {
+    condition     = contains(["Disabled", "Enabled", "NotSpecified"], var.managed_resources_public_network_access)
+    error_message = "The managed resources public network access setting must be one of: 'Disabled', 'Enabled', 'NotSpecified'."
+  }
+}
+
+variable "managed_event_hub_state" {
+  type        = string
+  default     = "NotSpecified"
+  description = "The managed event hub state for the Microsoft Purview account."
+  nullable    = false
+
+  validation {
+    condition     = contains(["Disabled", "Enabled", "NotSpecified"], var.managed_event_hub_state)
+    error_message = "The managed event hub state must be one of: 'Disabled', 'Enabled', 'NotSpecified'."
+  }
+}
+
+variable "managed_resource_group_name" {
+  type        = string
+  default     = null
+  description = "The name of the managed resource group used by the Microsoft Purview account. If unset, Azure generates one."
 }
 
 # tflint-ignore: terraform_unused_declarations

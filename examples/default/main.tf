@@ -57,8 +57,8 @@ module "test" {
 
   # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
   # ...
-  location            = azurerm_resource_group.this.location
-  name                = "TODO" # TODO update with module.naming.<RESOURCE_TYPE>.name_unique
-  resource_group_name = azurerm_resource_group.this.name
-  enable_telemetry    = var.enable_telemetry # see variables.tf
+  location         = azurerm_resource_group.this.location
+  name             = module.naming.purview_account.name_unique
+  parent_id        = azurerm_resource_group.this.id
+  enable_telemetry = var.enable_telemetry # see variables.tf
 }
