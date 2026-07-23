@@ -3,7 +3,6 @@ resource "azapi_resource" "this" {
   name      = var.name
   parent_id = var.parent_id
   type      = var.resource_types.purview_account
-
   body = {
     properties = {
       managedEventHubState                = var.managed_event_hub_state
@@ -12,12 +11,16 @@ resource "azapi_resource" "this" {
       publicNetworkAccess                 = var.public_network_access
     }
   }
+  create_headers            = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers            = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
   ignore_null_property      = true
+  read_headers              = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
   replace_triggers_refs     = ["body.properties.managedResourceGroupName"]
   response_export_values    = ["*"]
   retry                     = var.retry
   schema_validation_enabled = false
   tags                      = var.tags
+  update_headers            = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 
   dynamic "identity" {
     for_each = local.managed_identities.system_assigned_user_assigned
@@ -68,7 +71,6 @@ resource "azurerm_monitor_diagnostic_setting" "diagnostic_setting" {
       category = enabled_log.value
     }
   }
-
   dynamic "enabled_log" {
     for_each = each.value.log_groups
 

@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.21"
     }
-    modtm = {
-      source  = "azure/modtm"
-      version = "~> 0.3"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
@@ -26,7 +22,7 @@ provider "azurerm" {
 # This allows us to randomize the region for the resource group.
 module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
-  version = "~> 0.1"
+  version = "0.12.0"
 }
 
 # This allows us to randomize the region for the resource group.
@@ -39,7 +35,7 @@ resource "random_integer" "region_index" {
 # This ensures we have unique CAF compliant names for our resources.
 module "naming" {
   source  = "Azure/naming/azurerm"
-  version = "~> 0.3"
+  version = "0.4.3"
 }
 
 # This is required for resource modules
@@ -57,7 +53,10 @@ module "test" {
 
   # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
   # ...
-  location         = azurerm_resource_group.this.location
+  location = azurerm_resource_group.this.location
+  managed_identities = {
+    system_assigned = true
+  }
   name             = module.naming.purview_account.name_unique
   parent_id        = azurerm_resource_group.this.id
   enable_telemetry = var.enable_telemetry # see variables.tf
