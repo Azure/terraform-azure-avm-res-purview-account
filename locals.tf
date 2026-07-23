@@ -39,5 +39,6 @@ locals {
     ]
   ]) : "${role_assignment.pe_key}-${role_assignment.role_assignment_key}" => role_assignment }
   parent_resource_group_name         = split("/", var.parent_id)[4]
+  private_endpoint_subresource_name  = "account"
   role_definition_resource_substring = "/providers/Microsoft.Authorization/roleDefinitions"
 }

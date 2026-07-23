@@ -3,9 +3,11 @@ output "name" {
   value       = azapi_resource.this.name
 }
 
-output "resource_id" {
-  description = "The resource ID of the Microsoft Purview account."
-  value       = azapi_resource.this.id
+output "private_endpoints" {
+  description = <<DESCRIPTION
+  A map of the private endpoints created.
+  DESCRIPTION
+  value       = var.private_endpoints_manage_dns_zone_group ? azurerm_private_endpoint.managed_dns_zone_group : azurerm_private_endpoint.unmanaged_dns_zone_group
 }
 
 output "resource" {
@@ -13,9 +15,7 @@ output "resource" {
   value       = azapi_resource.this.output
 }
 
-output "private_endpoints" {
-  description = <<DESCRIPTION
-  A map of the private endpoints created.
-  DESCRIPTION
-  value       = var.private_endpoints_manage_dns_zone_group ? azurerm_private_endpoint.managed_dns_zone_group : azurerm_private_endpoint.unmanaged_dns_zone_group
+output "resource_id" {
+  description = "The resource ID of the Microsoft Purview account."
+  value       = azapi_resource.this.id
 }

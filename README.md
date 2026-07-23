@@ -77,6 +77,7 @@ Description: A map of diagnostic settings to create on the Microsoft Purview acc
 - `storage_account_resource_id` - (Optional) The resource ID of the storage account to send logs and metrics to.
 - `event_hub_authorization_rule_resource_id` - (Optional) The resource ID of the event hub authorization rule to send logs and metrics to.
 - `event_hub_name` - (Optional) The name of the event hub. If none is specified, the default event hub will be selected.
+- `marketplace_partner_resource_id` - (Optional) The full ARM resource ID of the Marketplace resource to which you would like to send Diagnostic Logs.
 
 Type:
 
@@ -91,6 +92,7 @@ map(object({
     storage_account_resource_id              = optional(string, null)
     event_hub_authorization_rule_resource_id = optional(string, null)
     event_hub_name                           = optional(string, null)
+    marketplace_partner_resource_id          = optional(string, null)
   }))
 ```
 
@@ -148,13 +150,7 @@ object({
   })
 ```
 
-Default:
-
-```json
-{
-  "system_assigned": true
-}
-```
+Default: `{}`
 
 ### <a name="input_managed_resource_group_name"></a> [managed\_resource\_group\_name](#input\_managed\_resource\_group\_name)
 
@@ -186,7 +182,6 @@ Description: A map of private endpoints to create on this resource. The map key 
 - `application_security_group_resource_ids` - (Optional) A map of resource IDs of application security groups to associate with the private endpoint. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
 - `private_service_connection_name` - (Optional) The name of the private service connection. One will be generated if not set.
 - `network_interface_name` - (Optional) The name of the network interface. One will be generated if not set.
-- `subresource_name` - (Optional) The Purview private link subresource name. Defaults to `account`. Use `portal` for a portal private endpoint.
 - `location` - (Optional) The Azure location where the resources will be deployed. Defaults to the location of the resource group.
 - `resource_group_name` - (Optional) The resource group where the resources will be deployed. Defaults to the resource group of this resource.
 - `ip_configurations` - (Optional) A map of IP configurations to create on the private endpoint. If not specified the platform will create one. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
@@ -219,7 +214,6 @@ map(object({
     application_security_group_associations = optional(map(string), {})
     private_service_connection_name         = optional(string, null)
     network_interface_name                  = optional(string, null)
-    subresource_name                        = optional(string, "account")
     location                                = optional(string, null)
     resource_group_name                     = optional(string, null)
     ip_configurations = optional(map(object({
