@@ -43,6 +43,15 @@ resource "azapi_resource" "this" {
   }
 }
 
+module "avm_interfaces" {
+  source  = "Azure/avm-utl-interfaces/azure"
+  version = "0.6.0"
+
+  diagnostic_settings_v2    = var.diagnostic_settings
+  diagnostic_settings_scope = azapi_resource.this.id
+  enable_telemetry          = var.enable_telemetry
+}
+
 # required AVM resources interfaces
 resource "azurerm_management_lock" "lock" {
   count = var.lock != null ? 1 : 0
@@ -53,38 +62,29 @@ resource "azurerm_management_lock" "lock" {
   notes      = var.lock.kind == "CanNotDelete" ? "Cannot delete the resource or its child resources." : "Cannot delete or modify the resource or its child resources."
 }
 
-resource "azurerm_monitor_diagnostic_setting" "diagnostic_setting" {
-  for_each = var.diagnostic_settings
+resource "azapi_resource" "diagnostic_setting" {
+  for_each = module.avm_interfaces.diagnostic_settings_azapi_v2
 
-  name                           = each.value.name != null ? each.value.name : "diag-${var.name}"
-  target_resource_id             = azapi_resource.this.id
-  eventhub_authorization_rule_id = each.value.event_hub_authorization_rule_resource_id
-  eventhub_name                  = each.value.event_hub_name
-  log_analytics_destination_type = each.value.log_analytics_destination_type
-  log_analytics_workspace_id     = each.value.workspace_resource_id
-  storage_account_id             = each.value.storage_account_resource_id
-  partner_solution_id            = each.value.marketplace_partner_resource_id
+  name                   = each.value.name
+  parent_id              = azapi_resource.this.id
+  type                   = each.value.type
+  body                   = each.value.body
+  create_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  delete_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  ignore_null_property   = true
+  read_headers           = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
+  response_export_values = []
+  retry                  = var.retry
+  update_headers         = var.enable_telemetry ? { "User-Agent" : local.avm_azapi_header } : null
 
-  dynamic "enabled_log" {
-    for_each = each.value.log_categories
-
-    content {
-      category = enabled_log.value
-    }
-  }
-  dynamic "enabled_log" {
-    for_each = each.value.log_groups
+  dynamic "timeouts" {
+    for_each = var.timeouts != null ? { this = var.timeouts } : {}
 
     content {
-      category_group = enabled_log.value
-    }
-  }
-
-  dynamic "enabled_metric" {
-    for_each = each.value.metric_categories
-
-    content {
-      category = enabled_metric.value
+      create = timeouts.value.create
+      delete = timeouts.value.delete
+      read   = timeouts.value.read
+      update = timeouts.value.update
     }
   }
 }
