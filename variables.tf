@@ -84,7 +84,7 @@ DESCRIPTION
   validation {
     condition = alltrue([
       for _, v in var.diagnostic_settings : alltrue([
-        for log in v.logs : (log.category != null) != (log.category_group != null)
+        for log in v.logs : (log.category == null) != (log.category_group == null)
       ])
     ])
     error_message = "Each log entry must set exactly one of `category` or `category_group`."
