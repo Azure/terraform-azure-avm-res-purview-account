@@ -63,6 +63,7 @@ resource "azurerm_monitor_diagnostic_setting" "diagnostic_setting" {
   log_analytics_destination_type = each.value.log_analytics_destination_type
   log_analytics_workspace_id     = each.value.workspace_resource_id
   storage_account_id             = each.value.storage_account_resource_id
+  partner_solution_id            = each.value.marketplace_partner_resource_id
 
   dynamic "enabled_log" {
     for_each = each.value.log_categories
