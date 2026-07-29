@@ -45,7 +45,7 @@ resource "azapi_resource" "this" {
 
 module "avm_interfaces" {
   source  = "Azure/avm-utl-interfaces/azure"
-  version = "0.6.0"
+  version = "~> 0.6"
 
   diagnostic_settings_v2 = var.diagnostic_settings
   enable_telemetry       = var.enable_telemetry
