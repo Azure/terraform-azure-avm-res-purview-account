@@ -38,7 +38,7 @@ locals {
       }
     ]
   ]) : "${role_assignment.pe_key}-${role_assignment.role_assignment_key}" => role_assignment }
-  parent_resource_group_name         = split("/", var.parent_id)[4]
+  parent_resource_group_name         = provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id).name
   private_endpoint_subresource_name  = "account"
   role_definition_resource_substring = "/providers/Microsoft.Authorization/roleDefinitions"
 }

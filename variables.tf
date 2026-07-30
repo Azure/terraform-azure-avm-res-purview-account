@@ -27,10 +27,24 @@ variable "parent_id" {
 
 variable "diagnostic_settings" {
   type = map(object({
-    name                                     = optional(string, null)
-    log_categories                           = optional(set(string), [])
-    log_groups                               = optional(set(string), ["allLogs"])
-    metric_categories                        = optional(set(string), ["AllMetrics"])
+    name = optional(string, null)
+    logs = optional(set(object({
+      category       = optional(string, null)
+      category_group = optional(string, null)
+      enabled        = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
+    metrics = optional(set(object({
+      category = optional(string, null)
+      enabled  = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
     log_analytics_destination_type           = optional(string, "Dedicated")
     workspace_resource_id                    = optional(string, null)
     storage_account_resource_id              = optional(string, null)
@@ -40,12 +54,11 @@ variable "diagnostic_settings" {
   }))
   default     = {}
   description = <<DESCRIPTION
-A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
 
-- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set, however this will not be unique if you want to create multiple diagnostic setting resources.
-- `log_categories` - (Optional) A set of log categories to send to the log analytics workspace. Defaults to `[]`.
-- `log_groups` - (Optional) A set of log groups to send to the log analytics workspace. Defaults to `["allLogs"]`.
-- `metric_categories` - (Optional) A set of metric categories to send to the log analytics workspace. Defaults to `["AllMetrics"]`.
+- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set.
+- `logs` - (Optional) A set of log categories or category groups to send to the log analytics workspace.
+- `metrics` - (Optional) A set of metric categories to send to the log analytics workspace.
 - `log_analytics_destination_type` - (Optional) The destination type for the diagnostic setting. Possible values are `Dedicated` and `AzureDiagnostics`. Defaults to `Dedicated`.
 - `workspace_resource_id` - (Optional) The resource ID of the log analytics workspace to send logs and metrics to.
 - `storage_account_resource_id` - (Optional) The resource ID of the storage account to send logs and metrics to.
@@ -58,6 +71,17 @@ DESCRIPTION
   validation {
     condition     = alltrue([for _, v in var.diagnostic_settings : contains(["Dedicated", "AzureDiagnostics"], v.log_analytics_destination_type)])
     error_message = "Log analytics destination type must be one of: 'Dedicated', 'AzureDiagnostics'."
+  }
+  validation {
+    condition = alltrue(flatten(
+      [
+        for _, v in var.diagnostic_settings : [
+          for log in v.logs :
+          (log.category == null) != (log.category_group == null)
+        ]
+      ]
+    ))
+    error_message = "Exactly one of: log `category` and log `category_group` must be set."
   }
   validation {
     condition = alltrue(
@@ -239,7 +263,7 @@ variable "resource_types" {
 
 variable "retry" {
   type = object({
-    error_message_regex  = list(string)
+    error_message_regex  = optional(list(string))
     interval_seconds     = optional(number)
     max_interval_seconds = optional(number)
   })
@@ -279,8 +303,9 @@ DESCRIPTION
 # tflint-ignore: terraform_unused_declarations
 variable "tags" {
   type        = map(string)
-  default     = null
+  default     = {}
   description = "(Optional) Tags of the resource."
+  nullable    = false
 }
 
 variable "timeouts" {

@@ -44,6 +44,18 @@ resource "azapi_resource" "this" {
 }
 
 # required AVM resources interfaces
+module "avm_interfaces" {
+  source  = "Azure/avm-utl-interfaces/azure"
+  version = "~> 0.6"
+
+  diagnostic_settings_v2 = {
+    for key, value in var.diagnostic_settings : key => merge(value, {
+      name = value.name != null ? value.name : "diag-${var.name}-${key}"
+    })
+  }
+  enable_telemetry = var.enable_telemetry
+}
+
 resource "azurerm_management_lock" "lock" {
   count = var.lock != null ? 1 : 0
 
@@ -53,40 +65,13 @@ resource "azurerm_management_lock" "lock" {
   notes      = var.lock.kind == "CanNotDelete" ? "Cannot delete the resource or its child resources." : "Cannot delete or modify the resource or its child resources."
 }
 
-resource "azurerm_monitor_diagnostic_setting" "diagnostic_setting" {
-  for_each = var.diagnostic_settings
+resource "azapi_resource" "diagnostic_settings" {
+  for_each = module.avm_interfaces.diagnostic_settings_azapi_v2
 
-  name                           = each.value.name != null ? each.value.name : "diag-${var.name}"
-  target_resource_id             = azapi_resource.this.id
-  eventhub_authorization_rule_id = each.value.event_hub_authorization_rule_resource_id
-  eventhub_name                  = each.value.event_hub_name
-  log_analytics_destination_type = each.value.log_analytics_destination_type
-  log_analytics_workspace_id     = each.value.workspace_resource_id
-  storage_account_id             = each.value.storage_account_resource_id
-  partner_solution_id            = each.value.marketplace_partner_resource_id
-
-  dynamic "enabled_log" {
-    for_each = each.value.log_categories
-
-    content {
-      category = enabled_log.value
-    }
-  }
-  dynamic "enabled_log" {
-    for_each = each.value.log_groups
-
-    content {
-      category_group = enabled_log.value
-    }
-  }
-
-  dynamic "enabled_metric" {
-    for_each = each.value.metric_categories
-
-    content {
-      category = enabled_metric.value
-    }
-  }
+  body      = each.value.body
+  name      = each.value.name
+  parent_id = azapi_resource.this.id
+  type      = each.value.type
 }
 
 resource "azurerm_role_assignment" "role_assignment" {
