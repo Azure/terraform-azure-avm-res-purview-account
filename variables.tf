@@ -105,10 +105,25 @@ DESCRIPTION
   nullable    = false
 }
 
+variable "ignore_body_changes" {
+  type = object({
+    authorization_locks                               = optional(list(string), [])
+    authorization_role_assignments                    = optional(list(string), [])
+    insights_diagnostic_settings                      = optional(list(string), [])
+    network_private_endpoints                         = optional(list(string), [])
+    network_private_endpoints_private_dns_zone_groups = optional(list(string), [])
+    purview_accounts                                  = optional(list(string), [])
+  })
+  default     = {}
+  description = "Body-relative property paths to ignore for each AzAPI resource type. Paths use dot notation; changes to this provider-private setting take effect only after apply."
+  nullable    = false
+}
+
 variable "lock" {
   type = object({
-    kind = string
-    name = optional(string, null)
+    kind  = string
+    name  = optional(string, null)
+    notes = optional(string, null)
   })
   default     = null
   description = <<DESCRIPTION
@@ -116,6 +131,7 @@ Controls the Resource Lock configuration for this resource. The following proper
 
 - `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
 - `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+- `notes` - (Optional) Notes about the lock. If not specified, a default note will be generated based on the `kind` value.
 DESCRIPTION
 
   validation {
@@ -126,7 +142,7 @@ DESCRIPTION
 
 variable "managed_event_hub_state" {
   type        = string
-  default     = "NotSpecified"
+  default     = "Disabled"
   description = "The managed event hub state for the Microsoft Purview account."
   nullable    = false
 
@@ -179,6 +195,7 @@ variable "private_endpoints" {
   type = map(object({
     name = optional(string, null)
     role_assignments = optional(map(object({
+      name                                   = optional(string, null)
       role_definition_id_or_name             = string
       principal_id                           = string
       description                            = optional(string, null)
@@ -189,11 +206,13 @@ variable "private_endpoints" {
       principal_type                         = optional(string, null)
     })), {})
     lock = optional(object({
-      kind = string
-      name = optional(string, null)
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
     }), null)
     tags                                    = optional(map(string), null)
     subnet_resource_id                      = string
+    subresource_name                        = optional(string, null)
     private_dns_zone_group_name             = optional(string, "default")
     private_dns_zone_resource_ids           = optional(set(string), [])
     application_security_group_associations = optional(map(string), {})
@@ -204,6 +223,7 @@ variable "private_endpoints" {
     ip_configurations = optional(map(object({
       name               = string
       private_ip_address = string
+      member_name        = optional(string)
     })), {})
   }))
   default     = {}
@@ -254,10 +274,15 @@ variable "public_network_access" {
 
 variable "resource_types" {
   type = object({
-    purview_account = optional(string, "Microsoft.Purview/accounts@2021-12-01")
+    authorization_locks                               = optional(string, "Microsoft.Authorization/locks@2020-05-01")
+    authorization_role_assignments                    = optional(string, "Microsoft.Authorization/roleAssignments@2022-04-01")
+    insights_diagnostic_settings                      = optional(string, "Microsoft.Insights/diagnosticSettings@2021-05-01-preview")
+    network_private_endpoints                         = optional(string, "Microsoft.Network/privateEndpoints@2024-05-01")
+    network_private_endpoints_private_dns_zone_groups = optional(string, "Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01")
+    purview_accounts                                  = optional(string, "Microsoft.Purview/accounts@2021-12-01")
   })
   default     = {}
-  description = "The Azure resource types and API versions to use for this module's AzAPI resources."
+  description = "The Azure resource types and API versions used by this module's AzAPI resources."
   nullable    = false
 }
 
@@ -273,6 +298,7 @@ variable "retry" {
 
 variable "role_assignments" {
   type = map(object({
+    name                                   = optional(string, null)
     role_definition_id_or_name             = string
     principal_id                           = string
     description                            = optional(string, null)
@@ -303,9 +329,8 @@ DESCRIPTION
 # tflint-ignore: terraform_unused_declarations
 variable "tags" {
   type        = map(string)
-  default     = {}
+  default     = null
   description = "(Optional) Tags of the resource."
-  nullable    = false
 }
 
 variable "timeouts" {

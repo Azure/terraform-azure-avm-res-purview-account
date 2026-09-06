@@ -5,14 +5,9 @@ output "name" {
 
 output "private_endpoints" {
   description = <<DESCRIPTION
-  A map of the private endpoints created.
+  A map of the private endpoint resource IDs created.
   DESCRIPTION
-  value       = var.private_endpoints_manage_dns_zone_group ? azurerm_private_endpoint.managed_dns_zone_group : azurerm_private_endpoint.unmanaged_dns_zone_group
-}
-
-output "resource" {
-  description = "Selected Microsoft Purview account resource properties returned by Azure."
-  value       = azapi_resource.this.output
+  value       = { for key, private_endpoint in azapi_resource.private_endpoint : key => private_endpoint.id }
 }
 
 output "resource_id" {

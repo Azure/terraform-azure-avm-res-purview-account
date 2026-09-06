@@ -18,27 +18,6 @@ locals {
       }
     } : {}
   }
-  # Private endpoint application security group associations.
-  # We merge the nested maps from private endpoints and application security group associations into a single map.
-  private_endpoint_application_security_group_associations = { for assoc in flatten([
-    for pe_k, pe_v in var.private_endpoints : [
-      for asg_k, asg_v in pe_v.application_security_group_associations : {
-        asg_key         = asg_k
-        pe_key          = pe_k
-        asg_resource_id = asg_v
-      }
-    ]
-  ]) : "${assoc.pe_key}-${assoc.asg_key}" => assoc }
-  private_endpoint_role_assignments = { for role_assignment in flatten([
-    for pe_k, pe_v in var.private_endpoints : [
-      for role_assignment_k, role_assignment_v in pe_v.role_assignments : {
-        pe_key                = pe_k
-        role_assignment_key   = role_assignment_k
-        role_assignment_value = role_assignment_v
-      }
-    ]
-  ]) : "${role_assignment.pe_key}-${role_assignment.role_assignment_key}" => role_assignment }
-  parent_resource_group_name         = provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id).name
-  private_endpoint_subresource_name  = "account"
-  role_definition_resource_substring = "/providers/Microsoft.Authorization/roleDefinitions"
+  parent_subscription_id            = provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id).subscription_id
+  private_endpoint_subresource_name = "account"
 }

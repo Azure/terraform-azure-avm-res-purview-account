@@ -6,12 +6,12 @@ This example will not be run as an e2e test as it has the .e2eignore file in the
 
 ```hcl
 terraform {
-  required_version = "~> 1.5"
+  required_version = ">= 1.9, < 2.0"
 
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.21"
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.12"
     }
     random = {
       source  = "hashicorp/random"
@@ -20,11 +20,6 @@ terraform {
   }
 }
 
-provider "azurerm" {
-  features {}
-}
-
-
 ## Section to provide a random Azure region for the resource group
 # This allows us to randomize the region for the resource group.
 module "regions" {
@@ -32,11 +27,42 @@ module "regions" {
   version = "0.12.0"
 }
 
+locals {
+  purview_regions = [for region in module.regions.regions : region if contains([
+    "australiaeast",
+    "brazilsouth",
+    "canadacentral",
+    "canadaeast",
+    "centralindia",
+    "eastus",
+    "eastus2",
+    "francecentral",
+    "germanywestcentral",
+    "japaneast",
+    "koreacentral",
+    "northeurope",
+    "qatarcentral",
+    "southafricanorth",
+    "southcentralus",
+    "southeastasia",
+    "swedencentral",
+    "switzerlandnorth",
+    "uaenorth",
+    "uksouth",
+    "westcentralus",
+    "westeurope",
+    "westus",
+    "westus2",
+    "westus3",
+  ], region.name)]
+}
+
 # This allows us to randomize the region for the resource group.
 resource "random_integer" "region_index" {
-  max = length(module.regions.regions) - 1
+  max = length(local.purview_regions) - 1
   min = 0
 }
+
 ## End of section to provide a random Azure region for the resource group
 
 # This ensures we have unique CAF compliant names for our resources.
@@ -46,9 +72,11 @@ module "naming" {
 }
 
 # This is required for resource modules
-resource "azurerm_resource_group" "this" {
-  location = module.regions.regions[random_integer.region_index.result].name
-  name     = module.naming.resource_group.name_unique
+resource "azapi_resource" "resource_group" {
+  location               = local.purview_regions[random_integer.region_index.result].name
+  name                   = module.naming.resource_group.name_unique
+  type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
+  response_export_values = []
 }
 
 # This is the module call
@@ -60,13 +88,13 @@ module "test" {
 
   # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
   # ...
-  location = azurerm_resource_group.this.location
+  location         = azapi_resource.resource_group.location
+  name             = module.naming.purview_account.name_unique
+  parent_id        = azapi_resource.resource_group.id
+  enable_telemetry = var.enable_telemetry # see variables.tf
   managed_identities = {
     system_assigned = true
   }
-  name             = module.naming.purview_account.name_unique
-  parent_id        = azurerm_resource_group.this.id
-  enable_telemetry = var.enable_telemetry # see variables.tf
 }
 ```
 
@@ -75,9 +103,9 @@ module "test" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.5)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
 
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.21)
+- <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
 - <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.5)
 
@@ -85,7 +113,7 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
-- [azurerm_resource_group.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) (resource)
+- [azapi_resource.resource_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [random_integer.region_index](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/integer) (resource)
 
 <!-- markdownlint-disable MD013 -->

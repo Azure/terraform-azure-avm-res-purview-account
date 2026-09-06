@@ -11,9 +11,7 @@ The following requirements are needed by this module:
 
 - <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
 
-- <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.4)
-
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
+- <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
 - <a name="requirement_modtm"></a> [modtm](#requirement\_modtm) (~> 0.3)
 
@@ -23,15 +21,14 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
+- [azapi_resource.diagnostic_settings](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_dns_zone_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_endpoint](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_endpoint_lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_endpoint_role_assignment](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.role_assignment](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
-- [azurerm_management_lock.lock](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/management_lock) (resource)
-- [azurerm_management_lock.private_endpoint_lock](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/management_lock) (resource)
-- [azurerm_monitor_diagnostic_setting.diagnostic_setting](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/monitor_diagnostic_setting) (resource)
-- [azurerm_private_endpoint.managed_dns_zone_group](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/private_endpoint) (resource)
-- [azurerm_private_endpoint.unmanaged_dns_zone_group](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/private_endpoint) (resource)
-- [azurerm_private_endpoint_application_security_group_association.application_security_group_association](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/private_endpoint_application_security_group_association) (resource)
-- [azurerm_role_assignment.private_endpoint_role_assignment](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) (resource)
-- [azurerm_role_assignment.role_assignment](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) (resource)
 - [modtm_telemetry.telemetry](https://registry.terraform.io/providers/azure/modtm/latest/docs/resources/telemetry) (resource)
 - [random_uuid.telemetry](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/uuid) (resource)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
@@ -66,12 +63,11 @@ The following input variables are optional (have default values):
 
 ### <a name="input_diagnostic_settings"></a> [diagnostic\_settings](#input\_diagnostic\_settings)
 
-Description: A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+Description: A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
 
-- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set, however this will not be unique if you want to create multiple diagnostic setting resources.
-- `log_categories` - (Optional) A set of log categories to send to the log analytics workspace. Defaults to `[]`.
-- `log_groups` - (Optional) A set of log groups to send to the log analytics workspace. Defaults to `["allLogs"]`.
-- `metric_categories` - (Optional) A set of metric categories to send to the log analytics workspace. Defaults to `["AllMetrics"]`.
+- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set.
+- `logs` - (Optional) A set of log categories or category groups to send to the log analytics workspace.
+- `metrics` - (Optional) A set of metric categories to send to the log analytics workspace.
 - `log_analytics_destination_type` - (Optional) The destination type for the diagnostic setting. Possible values are `Dedicated` and `AzureDiagnostics`. Defaults to `Dedicated`.
 - `workspace_resource_id` - (Optional) The resource ID of the log analytics workspace to send logs and metrics to.
 - `storage_account_resource_id` - (Optional) The resource ID of the storage account to send logs and metrics to.
@@ -83,10 +79,24 @@ Type:
 
 ```hcl
 map(object({
-    name                                     = optional(string, null)
-    log_categories                           = optional(set(string), [])
-    log_groups                               = optional(set(string), ["allLogs"])
-    metric_categories                        = optional(set(string), ["AllMetrics"])
+    name = optional(string, null)
+    logs = optional(set(object({
+      category       = optional(string, null)
+      category_group = optional(string, null)
+      enabled        = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
+    metrics = optional(set(object({
+      category = optional(string, null)
+      enabled  = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
     log_analytics_destination_type           = optional(string, "Dedicated")
     workspace_resource_id                    = optional(string, null)
     storage_account_resource_id              = optional(string, null)
@@ -108,19 +118,40 @@ Type: `bool`
 
 Default: `true`
 
+### <a name="input_ignore_body_changes"></a> [ignore\_body\_changes](#input\_ignore\_body\_changes)
+
+Description: Body-relative property paths to ignore for each AzAPI resource type. Paths use dot notation; changes to this provider-private setting take effect only after apply.
+
+Type:
+
+```hcl
+object({
+    authorization_locks                               = optional(list(string), [])
+    authorization_role_assignments                    = optional(list(string), [])
+    insights_diagnostic_settings                      = optional(list(string), [])
+    network_private_endpoints                         = optional(list(string), [])
+    network_private_endpoints_private_dns_zone_groups = optional(list(string), [])
+    purview_accounts                                  = optional(list(string), [])
+  })
+```
+
+Default: `{}`
+
 ### <a name="input_lock"></a> [lock](#input\_lock)
 
 Description: Controls the Resource Lock configuration for this resource. The following properties can be specified:
 
 - `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
 - `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+- `notes` - (Optional) Notes about the lock. If not specified, a default note will be generated based on the `kind` value.
 
 Type:
 
 ```hcl
 object({
-    kind = string
-    name = optional(string, null)
+    kind  = string
+    name  = optional(string, null)
+    notes = optional(string, null)
   })
 ```
 
@@ -132,7 +163,7 @@ Description: The managed event hub state for the Microsoft Purview account.
 
 Type: `string`
 
-Default: `"NotSpecified"`
+Default: `"Disabled"`
 
 ### <a name="input_managed_identities"></a> [managed\_identities](#input\_managed\_identities)
 
@@ -194,6 +225,7 @@ Type:
 map(object({
     name = optional(string, null)
     role_assignments = optional(map(object({
+      name                                   = optional(string, null)
       role_definition_id_or_name             = string
       principal_id                           = string
       description                            = optional(string, null)
@@ -204,11 +236,13 @@ map(object({
       principal_type                         = optional(string, null)
     })), {})
     lock = optional(object({
-      kind = string
-      name = optional(string, null)
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
     }), null)
     tags                                    = optional(map(string), null)
     subnet_resource_id                      = string
+    subresource_name                        = optional(string, null)
     private_dns_zone_group_name             = optional(string, "default")
     private_dns_zone_resource_ids           = optional(set(string), [])
     application_security_group_associations = optional(map(string), {})
@@ -219,6 +253,7 @@ map(object({
     ip_configurations = optional(map(object({
       name               = string
       private_ip_address = string
+      member_name        = optional(string)
     })), {})
   }))
 ```
@@ -243,13 +278,18 @@ Default: `"Enabled"`
 
 ### <a name="input_resource_types"></a> [resource\_types](#input\_resource\_types)
 
-Description: The Azure resource types and API versions to use for this module's AzAPI resources.
+Description: The Azure resource types and API versions used by this module's AzAPI resources.
 
 Type:
 
 ```hcl
 object({
-    purview_account = optional(string, "Microsoft.Purview/accounts@2021-12-01")
+    authorization_locks                               = optional(string, "Microsoft.Authorization/locks@2020-05-01")
+    authorization_role_assignments                    = optional(string, "Microsoft.Authorization/roleAssignments@2022-04-01")
+    insights_diagnostic_settings                      = optional(string, "Microsoft.Insights/diagnosticSettings@2021-05-01-preview")
+    network_private_endpoints                         = optional(string, "Microsoft.Network/privateEndpoints@2024-05-01")
+    network_private_endpoints_private_dns_zone_groups = optional(string, "Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01")
+    purview_accounts                                  = optional(string, "Microsoft.Purview/accounts@2021-12-01")
   })
 ```
 
@@ -263,7 +303,7 @@ Type:
 
 ```hcl
 object({
-    error_message_regex  = list(string)
+    error_message_regex  = optional(list(string))
     interval_seconds     = optional(number)
     max_interval_seconds = optional(number)
   })
@@ -290,6 +330,7 @@ Type:
 
 ```hcl
 map(object({
+    name                                   = optional(string, null)
     role_definition_id_or_name             = string
     principal_id                           = string
     description                            = optional(string, null)
@@ -338,11 +379,7 @@ Description: The name of the Microsoft Purview account.
 
 ### <a name="output_private_endpoints"></a> [private\_endpoints](#output\_private\_endpoints)
 
-Description:   A map of the private endpoints created.
-
-### <a name="output_resource"></a> [resource](#output\_resource)
-
-Description: Selected Microsoft Purview account resource properties returned by Azure.
+Description:   A map of the private endpoint resource IDs created.
 
 ### <a name="output_resource_id"></a> [resource\_id](#output\_resource\_id)
 
@@ -350,7 +387,13 @@ Description: The resource ID of the Microsoft Purview account.
 
 ## Modules
 
-No modules.
+The following Modules are called:
+
+### <a name="module_avm_interfaces"></a> [avm\_interfaces](#module\_avm\_interfaces)
+
+Source: Azure/avm-utl-interfaces/azure
+
+Version: 0.7.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
