@@ -1,4 +1,3 @@
-# TODO: insert locals here.
 locals {
   managed_identities = {
     system_assigned_user_assigned = (var.managed_identities.system_assigned || length(var.managed_identities.user_assigned_resource_ids) > 0) ? {
@@ -30,5 +29,16 @@ locals {
       }
     ]
   ]) : "${assoc.pe_key}-${assoc.asg_key}" => assoc }
+  private_endpoint_role_assignments = { for role_assignment in flatten([
+    for pe_k, pe_v in var.private_endpoints : [
+      for role_assignment_k, role_assignment_v in pe_v.role_assignments : {
+        pe_key                = pe_k
+        role_assignment_key   = role_assignment_k
+        role_assignment_value = role_assignment_v
+      }
+    ]
+  ]) : "${role_assignment.pe_key}-${role_assignment.role_assignment_key}" => role_assignment }
+  parent_resource_group_name         = provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id).name
+  private_endpoint_subresource_name  = "account"
   role_definition_resource_substring = "/providers/Microsoft.Authorization/roleDefinitions"
 }
