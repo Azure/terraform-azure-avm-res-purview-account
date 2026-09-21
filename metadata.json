@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
+  "moduleDisplayName": "Terraform Azure Verified Resource Module for Purview Account",
+  "moduleDescription": "Intended AVM Terraform resource module for Microsoft.Purview/accounts.",
+  "canonicalType": "Microsoft.Purview/accounts",
+  "owners": [
+    "SriHarshaTripuramallu"
+  ],
+  "telemetryIdPrefix": "46d3xtrf.res.ba6e865"
+}
