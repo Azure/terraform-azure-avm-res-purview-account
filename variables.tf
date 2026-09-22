@@ -92,6 +92,27 @@ DESCRIPTION
     )
     error_message = "At least one of `workspace_resource_id`, `storage_account_resource_id`, `event_hub_authorization_rule_resource_id`, or `marketplace_partner_resource_id`, must be set."
   }
+  validation {
+    condition = alltrue([
+      for _, v in var.diagnostic_settings :
+      v.workspace_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.OperationalInsights/workspaces", v.workspace_resource_id))
+    ])
+    error_message = "Each `diagnostic_settings[*].workspace_resource_id` must be a valid Log Analytics workspace resource ID."
+  }
+  validation {
+    condition = alltrue([
+      for _, v in var.diagnostic_settings :
+      v.storage_account_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.Storage/storageAccounts", v.storage_account_resource_id))
+    ])
+    error_message = "Each `diagnostic_settings[*].storage_account_resource_id` must be a valid storage account resource ID."
+  }
+  validation {
+    condition = alltrue([
+      for _, v in var.diagnostic_settings :
+      v.event_hub_authorization_rule_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.EventHub/namespaces/authorizationRules", v.event_hub_authorization_rule_resource_id))
+    ])
+    error_message = "Each `diagnostic_settings[*].event_hub_authorization_rule_resource_id` must be a valid Event Hubs namespace authorization rule resource ID."
+  }
 }
 
 variable "enable_telemetry" {
@@ -171,6 +192,13 @@ DESCRIPTION
     condition     = !(var.managed_identities.system_assigned && length(var.managed_identities.user_assigned_resource_ids) > 0)
     error_message = "Microsoft Purview accounts using the stable default API support either system-assigned or user-assigned identity, not both."
   }
+  validation {
+    condition = alltrue([
+      for resource_id in var.managed_identities.user_assigned_resource_ids :
+      can(provider::azapi::parse_resource_id("Microsoft.ManagedIdentity/userAssignedIdentities", resource_id))
+    ])
+    error_message = "Each `managed_identities.user_assigned_resource_ids` entry must be a valid user-assigned managed identity resource ID."
+  }
 }
 
 variable "managed_resource_group_name" {
@@ -247,6 +275,41 @@ A map of private endpoints to create on this resource. The map key is deliberate
   - `private_ip_address` - The private IP address of the IP configuration.
 DESCRIPTION
   nullable    = false
+
+  validation {
+    condition = alltrue([
+      for _, private_endpoint in var.private_endpoints :
+      can(provider::azapi::parse_resource_id("Microsoft.Network/virtualNetworks/subnets", private_endpoint.subnet_resource_id))
+    ])
+    error_message = "Each `private_endpoints[*].subnet_resource_id` must be a valid subnet resource ID."
+  }
+  validation {
+    condition = alltrue(flatten([
+      for _, private_endpoint in var.private_endpoints : [
+        for resource_id in private_endpoint.private_dns_zone_resource_ids :
+        can(provider::azapi::parse_resource_id("Microsoft.Network/privateDnsZones", resource_id))
+      ]
+    ]))
+    error_message = "Each `private_endpoints[*].private_dns_zone_resource_ids` entry must be a valid private DNS zone resource ID."
+  }
+  validation {
+    condition = alltrue(flatten([
+      for _, private_endpoint in var.private_endpoints : [
+        for _, resource_id in private_endpoint.application_security_group_associations :
+        can(provider::azapi::parse_resource_id("Microsoft.Network/applicationSecurityGroups", resource_id))
+      ]
+    ]))
+    error_message = "Each `private_endpoints[*].application_security_group_associations` value must be a valid application security group resource ID."
+  }
+  validation {
+    condition = alltrue(flatten([
+      for _, private_endpoint in var.private_endpoints : [
+        for _, role_assignment in private_endpoint.role_assignments :
+        role_assignment.delegated_managed_identity_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.ManagedIdentity/userAssignedIdentities", role_assignment.delegated_managed_identity_resource_id))
+      ]
+    ]))
+    error_message = "Each `private_endpoints[*].role_assignments[*].delegated_managed_identity_resource_id` must be a valid user-assigned managed identity resource ID."
+  }
 }
 
 # This variable is used to determine if the private_dns_zone_group block should be included,
@@ -324,6 +387,14 @@ A map of role assignments to create on this resource. The map key is deliberatel
 > Note: only set `skip_service_principal_aad_check` to true if you are assigning a role to a service principal.
 DESCRIPTION
   nullable    = false
+
+  validation {
+    condition = alltrue([
+      for _, role_assignment in var.role_assignments :
+      role_assignment.delegated_managed_identity_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.ManagedIdentity/userAssignedIdentities", role_assignment.delegated_managed_identity_resource_id))
+    ])
+    error_message = "Each `role_assignments[*].delegated_managed_identity_resource_id` must be a valid user-assigned managed identity resource ID."
+  }
 }
 
 # tflint-ignore: terraform_unused_declarations
