@@ -6,51 +6,45 @@ variable "location" {
 
 variable "name" {
   type        = string
-  description = "The name of the this resource."
+  description = "The name of the Microsoft Purview account."
 
   validation {
-    condition     = can(regex("TODO", var.name))
-    error_message = "The name must be TODO." # TODO remove the example below once complete:
-    #condition     = can(regex("^[a-z0-9]{5,50}$", var.name))
-    #error_message = "The name must be between 5 and 50 characters long and can only contain lowercase letters and numbers."
+    condition     = can(regex("^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$", var.name)) && length(var.name) >= 3 && length(var.name) <= 63
+    error_message = "The name must be between 3 and 63 characters long, contain only letters, numbers, and hyphens, and cannot start or end with a hyphen."
   }
 }
 
-# This is required for most resource modules
-variable "resource_group_name" {
+variable "parent_id" {
   type        = string
-  description = "The resource group where the resources will be deployed."
-}
+  description = "The resource ID of the resource group where the Microsoft Purview account will be deployed."
+  nullable    = false
 
-# required AVM interfaces
-# remove only if not supported by the resource
-# tflint-ignore: terraform_unused_declarations
-variable "customer_managed_key" {
-  type = object({
-    key_vault_resource_id = string
-    key_name              = string
-    key_version           = optional(string, null)
-    user_assigned_identity = optional(object({
-      resource_id = string
-    }), null)
-  })
-  default     = null
-  description = <<DESCRIPTION
-A map describing customer-managed keys to associate with the resource. This includes the following properties:
-- `key_vault_resource_id` - The resource ID of the Key Vault where the key is stored.
-- `key_name` - The name of the key.
-- `key_version` - (Optional) The version of the key. If not specified, the latest version is used.
-- `user_assigned_identity` - (Optional) An object representing a user-assigned identity with the following properties:
-  - `resource_id` - The resource ID of the user-assigned identity.
-DESCRIPTION
+  validation {
+    condition     = can(provider::azapi::parse_resource_id("Microsoft.Resources/resourceGroups", var.parent_id))
+    error_message = "The parent_id must be a valid resource group resource ID."
+  }
 }
 
 variable "diagnostic_settings" {
   type = map(object({
-    name                                     = optional(string, null)
-    log_categories                           = optional(set(string), [])
-    log_groups                               = optional(set(string), ["allLogs"])
-    metric_categories                        = optional(set(string), ["AllMetrics"])
+    name = optional(string, null)
+    logs = optional(set(object({
+      category       = optional(string, null)
+      category_group = optional(string, null)
+      enabled        = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
+    metrics = optional(set(object({
+      category = optional(string, null)
+      enabled  = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
     log_analytics_destination_type           = optional(string, "Dedicated")
     workspace_resource_id                    = optional(string, null)
     storage_account_resource_id              = optional(string, null)
@@ -60,18 +54,17 @@ variable "diagnostic_settings" {
   }))
   default     = {}
   description = <<DESCRIPTION
-A map of diagnostic settings to create on the Key Vault. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
 
-- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set, however this will not be unique if you want to create multiple diagnostic setting resources.
-- `log_categories` - (Optional) A set of log categories to send to the log analytics workspace. Defaults to `[]`.
-- `log_groups` - (Optional) A set of log groups to send to the log analytics workspace. Defaults to `["allLogs"]`.
-- `metric_categories` - (Optional) A set of metric categories to send to the log analytics workspace. Defaults to `["AllMetrics"]`.
+- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set.
+- `logs` - (Optional) A set of log categories or category groups to send to the log analytics workspace.
+- `metrics` - (Optional) A set of metric categories to send to the log analytics workspace.
 - `log_analytics_destination_type` - (Optional) The destination type for the diagnostic setting. Possible values are `Dedicated` and `AzureDiagnostics`. Defaults to `Dedicated`.
 - `workspace_resource_id` - (Optional) The resource ID of the log analytics workspace to send logs and metrics to.
 - `storage_account_resource_id` - (Optional) The resource ID of the storage account to send logs and metrics to.
 - `event_hub_authorization_rule_resource_id` - (Optional) The resource ID of the event hub authorization rule to send logs and metrics to.
 - `event_hub_name` - (Optional) The name of the event hub. If none is specified, the default event hub will be selected.
-- `marketplace_partner_resource_id` - (Optional) The full ARM resource ID of the Marketplace resource to which you would like to send Diagnostic LogsLogs.
+- `marketplace_partner_resource_id` - (Optional) The full ARM resource ID of the Marketplace resource to which you would like to send Diagnostic Logs.
 DESCRIPTION
   nullable    = false
 
@@ -80,13 +73,45 @@ DESCRIPTION
     error_message = "Log analytics destination type must be one of: 'Dedicated', 'AzureDiagnostics'."
   }
   validation {
+    condition = alltrue(flatten(
+      [
+        for _, v in var.diagnostic_settings : [
+          for log in v.logs :
+          (log.category == null) != (log.category_group == null)
+        ]
+      ]
+    ))
+    error_message = "Exactly one of: log `category` and log `category_group` must be set."
+  }
+  validation {
     condition = alltrue(
       [
         for _, v in var.diagnostic_settings :
         v.workspace_resource_id != null || v.storage_account_resource_id != null || v.event_hub_authorization_rule_resource_id != null || v.marketplace_partner_resource_id != null
       ]
     )
-    error_message = "At least one of `workspace_resource_id`, `storage_account_resource_id`, `marketplace_partner_resource_id`, or `event_hub_authorization_rule_resource_id`, must be set."
+    error_message = "At least one of `workspace_resource_id`, `storage_account_resource_id`, `event_hub_authorization_rule_resource_id`, or `marketplace_partner_resource_id`, must be set."
+  }
+  validation {
+    condition = alltrue([
+      for _, v in var.diagnostic_settings :
+      v.workspace_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.OperationalInsights/workspaces", v.workspace_resource_id))
+    ])
+    error_message = "Each `diagnostic_settings[*].workspace_resource_id` must be a valid Log Analytics workspace resource ID."
+  }
+  validation {
+    condition = alltrue([
+      for _, v in var.diagnostic_settings :
+      v.storage_account_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.Storage/storageAccounts", v.storage_account_resource_id))
+    ])
+    error_message = "Each `diagnostic_settings[*].storage_account_resource_id` must be a valid storage account resource ID."
+  }
+  validation {
+    condition = alltrue([
+      for _, v in var.diagnostic_settings :
+      v.event_hub_authorization_rule_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.EventHub/namespaces/authorizationRules", v.event_hub_authorization_rule_resource_id))
+    ])
+    error_message = "Each `diagnostic_settings[*].event_hub_authorization_rule_resource_id` must be a valid Event Hubs namespace authorization rule resource ID."
   }
 }
 
@@ -101,10 +126,25 @@ DESCRIPTION
   nullable    = false
 }
 
+variable "ignore_body_changes" {
+  type = object({
+    authorization_locks                               = optional(list(string), [])
+    authorization_role_assignments                    = optional(list(string), [])
+    insights_diagnostic_settings                      = optional(list(string), [])
+    network_private_endpoints                         = optional(list(string), [])
+    network_private_endpoints_private_dns_zone_groups = optional(list(string), [])
+    purview_accounts                                  = optional(list(string), [])
+  })
+  default     = {}
+  description = "Body-relative property paths to ignore for each AzAPI resource type. Paths use dot notation; changes to this provider-private setting take effect only after apply."
+  nullable    = false
+}
+
 variable "lock" {
   type = object({
-    kind = string
-    name = optional(string, null)
+    kind  = string
+    name  = optional(string, null)
+    notes = optional(string, null)
   })
   default     = null
   description = <<DESCRIPTION
@@ -112,11 +152,24 @@ Controls the Resource Lock configuration for this resource. The following proper
 
 - `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
 - `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+- `notes` - (Optional) Notes about the lock. If not specified, a default note will be generated based on the `kind` value.
 DESCRIPTION
 
   validation {
     condition     = var.lock != null ? contains(["CanNotDelete", "ReadOnly"], var.lock.kind) : true
     error_message = "The lock level must be one of: 'None', 'CanNotDelete', or 'ReadOnly'."
+  }
+}
+
+variable "managed_event_hub_state" {
+  type        = string
+  default     = "Disabled"
+  description = "The managed event hub state for the Microsoft Purview account."
+  nullable    = false
+
+  validation {
+    condition     = contains(["Disabled", "Enabled", "NotSpecified"], var.managed_event_hub_state)
+    error_message = "The managed event hub state must be one of: 'Disabled', 'Enabled', 'NotSpecified'."
   }
 }
 
@@ -134,12 +187,43 @@ Controls the Managed Identity configuration on this resource. The following prop
 - `user_assigned_resource_ids` - (Optional) Specifies a list of User Assigned Managed Identity resource IDs to be assigned to this resource.
 DESCRIPTION
   nullable    = false
+
+  validation {
+    condition     = !(var.managed_identities.system_assigned && length(var.managed_identities.user_assigned_resource_ids) > 0)
+    error_message = "Microsoft Purview accounts using the stable default API support either system-assigned or user-assigned identity, not both."
+  }
+  validation {
+    condition = alltrue([
+      for resource_id in var.managed_identities.user_assigned_resource_ids :
+      can(provider::azapi::parse_resource_id("Microsoft.ManagedIdentity/userAssignedIdentities", resource_id))
+    ])
+    error_message = "Each `managed_identities.user_assigned_resource_ids` entry must be a valid user-assigned managed identity resource ID."
+  }
+}
+
+variable "managed_resource_group_name" {
+  type        = string
+  default     = null
+  description = "The name of the managed resource group used by the Microsoft Purview account. If unset, Azure generates one."
+}
+
+variable "managed_resources_public_network_access" {
+  type        = string
+  default     = "NotSpecified"
+  description = "The public network access setting for managed resources created by the Microsoft Purview account."
+  nullable    = false
+
+  validation {
+    condition     = contains(["Disabled", "Enabled", "NotSpecified"], var.managed_resources_public_network_access)
+    error_message = "The managed resources public network access setting must be one of: 'Disabled', 'Enabled', 'NotSpecified'."
+  }
 }
 
 variable "private_endpoints" {
   type = map(object({
     name = optional(string, null)
     role_assignments = optional(map(object({
+      name                                   = optional(string, null)
       role_definition_id_or_name             = string
       principal_id                           = string
       description                            = optional(string, null)
@@ -147,13 +231,16 @@ variable "private_endpoints" {
       condition                              = optional(string, null)
       condition_version                      = optional(string, null)
       delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
     })), {})
     lock = optional(object({
-      kind = string
-      name = optional(string, null)
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
     }), null)
     tags                                    = optional(map(string), null)
     subnet_resource_id                      = string
+    subresource_name                        = optional(string, null)
     private_dns_zone_group_name             = optional(string, "default")
     private_dns_zone_resource_ids           = optional(set(string), [])
     application_security_group_associations = optional(map(string), {})
@@ -164,6 +251,7 @@ variable "private_endpoints" {
     ip_configurations = optional(map(object({
       name               = string
       private_ip_address = string
+      member_name        = optional(string)
     })), {})
   }))
   default     = {}
@@ -187,6 +275,41 @@ A map of private endpoints to create on this resource. The map key is deliberate
   - `private_ip_address` - The private IP address of the IP configuration.
 DESCRIPTION
   nullable    = false
+
+  validation {
+    condition = alltrue([
+      for _, private_endpoint in var.private_endpoints :
+      can(provider::azapi::parse_resource_id("Microsoft.Network/virtualNetworks/subnets", private_endpoint.subnet_resource_id))
+    ])
+    error_message = "Each `private_endpoints[*].subnet_resource_id` must be a valid subnet resource ID."
+  }
+  validation {
+    condition = alltrue(flatten([
+      for _, private_endpoint in var.private_endpoints : [
+        for resource_id in private_endpoint.private_dns_zone_resource_ids :
+        can(provider::azapi::parse_resource_id("Microsoft.Network/privateDnsZones", resource_id))
+      ]
+    ]))
+    error_message = "Each `private_endpoints[*].private_dns_zone_resource_ids` entry must be a valid private DNS zone resource ID."
+  }
+  validation {
+    condition = alltrue(flatten([
+      for _, private_endpoint in var.private_endpoints : [
+        for _, resource_id in private_endpoint.application_security_group_associations :
+        can(provider::azapi::parse_resource_id("Microsoft.Network/applicationSecurityGroups", resource_id))
+      ]
+    ]))
+    error_message = "Each `private_endpoints[*].application_security_group_associations` value must be a valid application security group resource ID."
+  }
+  validation {
+    condition = alltrue(flatten([
+      for _, private_endpoint in var.private_endpoints : [
+        for _, role_assignment in private_endpoint.role_assignments :
+        role_assignment.delegated_managed_identity_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.ManagedIdentity/userAssignedIdentities", role_assignment.delegated_managed_identity_resource_id))
+      ]
+    ]))
+    error_message = "Each `private_endpoints[*].role_assignments[*].delegated_managed_identity_resource_id` must be a valid user-assigned managed identity resource ID."
+  }
 }
 
 # This variable is used to determine if the private_dns_zone_group block should be included,
@@ -200,8 +323,45 @@ variable "private_endpoints_manage_dns_zone_group" {
   nullable    = false
 }
 
+variable "public_network_access" {
+  type        = string
+  default     = "Enabled"
+  description = "The public network access setting for the Microsoft Purview account."
+  nullable    = false
+
+  validation {
+    condition     = contains(["Disabled", "Enabled", "NotSpecified"], var.public_network_access)
+    error_message = "The public network access setting must be one of: 'Disabled', 'Enabled', 'NotSpecified'."
+  }
+}
+
+variable "resource_types" {
+  type = object({
+    authorization_locks                               = optional(string, "Microsoft.Authorization/locks@2020-05-01")
+    authorization_role_assignments                    = optional(string, "Microsoft.Authorization/roleAssignments@2022-04-01")
+    insights_diagnostic_settings                      = optional(string, "Microsoft.Insights/diagnosticSettings@2021-05-01-preview")
+    network_private_endpoints                         = optional(string, "Microsoft.Network/privateEndpoints@2024-05-01")
+    network_private_endpoints_private_dns_zone_groups = optional(string, "Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01")
+    purview_accounts                                  = optional(string, "Microsoft.Purview/accounts@2021-12-01")
+  })
+  default     = {}
+  description = "The Azure resource types and API versions used by this module's AzAPI resources."
+  nullable    = false
+}
+
+variable "retry" {
+  type = object({
+    error_message_regex  = optional(list(string))
+    interval_seconds     = optional(number)
+    max_interval_seconds = optional(number)
+  })
+  default     = null
+  description = "The retry configuration to apply to AzAPI resources."
+}
+
 variable "role_assignments" {
   type = map(object({
+    name                                   = optional(string, null)
     role_definition_id_or_name             = string
     principal_id                           = string
     description                            = optional(string, null)
@@ -227,6 +387,14 @@ A map of role assignments to create on this resource. The map key is deliberatel
 > Note: only set `skip_service_principal_aad_check` to true if you are assigning a role to a service principal.
 DESCRIPTION
   nullable    = false
+
+  validation {
+    condition = alltrue([
+      for _, role_assignment in var.role_assignments :
+      role_assignment.delegated_managed_identity_resource_id == null || can(provider::azapi::parse_resource_id("Microsoft.ManagedIdentity/userAssignedIdentities", role_assignment.delegated_managed_identity_resource_id))
+    ])
+    error_message = "Each `role_assignments[*].delegated_managed_identity_resource_id` must be a valid user-assigned managed identity resource ID."
+  }
 }
 
 # tflint-ignore: terraform_unused_declarations
@@ -234,4 +402,15 @@ variable "tags" {
   type        = map(string)
   default     = null
   description = "(Optional) Tags of the resource."
+}
+
+variable "timeouts" {
+  type = object({
+    create = optional(string)
+    delete = optional(string)
+    read   = optional(string)
+    update = optional(string)
+  })
+  default     = null
+  description = "The timeout configuration to apply to AzAPI resources."
 }
