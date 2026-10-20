@@ -1,3 +1,3 @@
-# terraform-azurerm-avm-template
+# Purview Account
 
-This is a template repo for Terraform Azure Verified Modules.
+AVM Terraform resource module for Purview Account.
