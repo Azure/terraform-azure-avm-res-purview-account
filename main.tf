@@ -43,8 +43,9 @@ resource "azapi_resource" "this" {
 # required AVM resources interfaces
 module "avm_interfaces" {
   source  = "Azure/avm-utl-interfaces/azure"
-  version = "0.7.0"
+  version = "0.9.0"
 
+  location = var.location
   diagnostic_settings_v2 = {
     for key, value in var.diagnostic_settings : key => merge(value, {
       name = value.name != null ? value.name : "diag-${var.name}-${key}"

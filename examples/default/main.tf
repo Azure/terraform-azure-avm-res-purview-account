@@ -8,18 +8,20 @@ terraform {
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.5"
+      version = "~> 3.7"
     }
   }
 }
 
-## Section to provide a random Azure region for the resource group
-# This allows us to randomize the region for the resource group.
+provider "azapi" {}
+
 module "regions" {
   source  = "Azure/avm-utl-regions/azurerm"
-  version = "0.12.0"
+  version = "0.13.0"
 
+  location         = var.location
   enable_telemetry = var.enable_telemetry
+  is_recommended   = true
 }
 
 locals {
@@ -52,41 +54,33 @@ locals {
   ], region.name)]
 }
 
-# This allows us to randomize the region for the resource group.
 resource "random_integer" "region_index" {
   max = length(local.purview_regions) - 1
   min = 0
 }
 
-## End of section to provide a random Azure region for the resource group
-
-# This ensures we have unique CAF compliant names for our resources.
 module "naming" {
-  source  = "Azure/naming/azurerm"
-  version = "0.4.3"
+  source  = "Azure/avm-utl-naming/azure"
+  version = "0.2.0"
 }
 
-# This is required for resource modules
+data "azapi_client_config" "current" {}
+
 resource "azapi_resource" "resource_group" {
   location               = local.purview_regions[random_integer.region_index.result].name
-  name                   = module.naming.resource_group.name_unique
-  type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
+  name                   = module.naming.names.resource_group.name_unique
+  parent_id              = "/subscriptions/${data.azapi_client_config.current.subscription_id}"
+  type                   = "Microsoft.Resources/resourceGroups@2024-11-01"
   response_export_values = []
 }
 
-# This is the module call
-# Do not specify location here due to the randomization above.
-# Leaving location as `null` will cause the module to use the resource group location
-# with a data source.
 module "test" {
   source = "../../"
 
-  # source             = "Azure/avm-<res/ptn>-<name>/azurerm"
-  # ...
   location         = azapi_resource.resource_group.location
-  name             = module.naming.purview_account.name_unique
+  name             = module.naming.names.purview_account.name_unique
   parent_id        = azapi_resource.resource_group.id
-  enable_telemetry = var.enable_telemetry # see variables.tf
+  enable_telemetry = var.enable_telemetry
   managed_identities = {
     system_assigned = true
   }
