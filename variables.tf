@@ -173,7 +173,6 @@ variable "managed_event_hub_state" {
   }
 }
 
-# tflint-ignore: terraform_unused_declarations
 variable "managed_identities" {
   type = object({
     system_assigned            = optional(bool, false)
@@ -397,7 +396,6 @@ DESCRIPTION
   }
 }
 
-# tflint-ignore: terraform_unused_declarations
 variable "tags" {
   type        = map(string)
   default     = null
