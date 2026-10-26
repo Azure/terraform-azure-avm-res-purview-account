@@ -31,8 +31,38 @@ module "regions" {
   is_recommended   = true
 }
 
+locals {
+  purview_regions = [for region in module.regions.regions : region if contains([
+    "australiaeast",
+    "brazilsouth",
+    "canadacentral",
+    "canadaeast",
+    "centralindia",
+    "eastus",
+    "eastus2",
+    "francecentral",
+    "germanywestcentral",
+    "japaneast",
+    "koreacentral",
+    "northeurope",
+    "qatarcentral",
+    "southafricanorth",
+    "southcentralus",
+    "southeastasia",
+    "swedencentral",
+    "switzerlandnorth",
+    "uaenorth",
+    "uksouth",
+    "westcentralus",
+    "westeurope",
+    "westus",
+    "westus2",
+    "westus3",
+  ], region.name)]
+}
+
 resource "random_integer" "region_index" {
-  max = length(module.regions.regions) - 1
+  max = length(local.purview_regions) - 1
   min = 0
 }
 
@@ -44,7 +74,7 @@ module "naming" {
 data "azapi_client_config" "current" {}
 
 resource "azapi_resource" "resource_group" {
-  location               = module.regions.regions[random_integer.region_index.result].name
+  location               = local.purview_regions[random_integer.region_index.result].name
   name                   = module.naming.names.resource_group.name_unique
   parent_id              = "/subscriptions/${data.azapi_client_config.current.subscription_id}"
   type                   = "Microsoft.Resources/resourceGroups@2024-11-01"
@@ -54,11 +84,13 @@ resource "azapi_resource" "resource_group" {
 module "test" {
   source = "../../"
 
-  address_space    = ["10.0.0.0/16"]
   location         = azapi_resource.resource_group.location
-  name             = module.naming.names.virtual_network.name_unique
+  name             = module.naming.names.purview_account.name_unique
   parent_id        = azapi_resource.resource_group.id
   enable_telemetry = var.enable_telemetry
+  managed_identities = {
+    system_assigned = true
+  }
 }
 ```
 

@@ -17,6 +17,13 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
+- [azapi_resource.diagnostic_settings](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_dns_zone_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_endpoint](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_endpoint_lock](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.private_endpoint_role_assignment](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.role_assignment](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.this](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
@@ -27,33 +34,74 @@ The following resources are used by this module:
 
 The following input variables are required:
 
-### <a name="input_address_space"></a> [address\_space](#input\_address\_space)
-
-Description: The address prefixes of the virtual network, in CIDR notation.
-
-Type: `list(string)`
-
 ### <a name="input_location"></a> [location](#input\_location)
 
-Description: The Azure region where the virtual network will be created.
+Description: Azure region where the resource should be deployed.
 
 Type: `string`
 
 ### <a name="input_name"></a> [name](#input\_name)
 
-Description: The name of the virtual network.
+Description: The name of the Microsoft Purview account.
 
 Type: `string`
 
 ### <a name="input_parent_id"></a> [parent\_id](#input\_parent\_id)
 
-Description: The resource ID of the resource group where the virtual network will be created.
+Description: The resource ID of the resource group where the Microsoft Purview account will be deployed.
 
 Type: `string`
 
 ## Optional Inputs
 
 The following input variables are optional (have default values):
+
+### <a name="input_diagnostic_settings"></a> [diagnostic\_settings](#input\_diagnostic\_settings)
+
+Description: A map of diagnostic settings to create on the Microsoft Purview account. The map key is deliberately arbitrary to avoid issues where map keys may be unknown at plan time.
+
+- `name` - (Optional) The name of the diagnostic setting. One will be generated if not set.
+- `logs` - (Optional) A set of log categories or category groups to send to the log analytics workspace.
+- `metrics` - (Optional) A set of metric categories to send to the log analytics workspace.
+- `log_analytics_destination_type` - (Optional) The destination type for the diagnostic setting. Possible values are `Dedicated` and `AzureDiagnostics`. Defaults to `Dedicated`.
+- `workspace_resource_id` - (Optional) The resource ID of the log analytics workspace to send logs and metrics to.
+- `storage_account_resource_id` - (Optional) The resource ID of the storage account to send logs and metrics to.
+- `event_hub_authorization_rule_resource_id` - (Optional) The resource ID of the event hub authorization rule to send logs and metrics to.
+- `event_hub_name` - (Optional) The name of the event hub. If none is specified, the default event hub will be selected.
+- `marketplace_partner_resource_id` - (Optional) The full ARM resource ID of the Marketplace resource to which you would like to send Diagnostic Logs.
+
+Type:
+
+```hcl
+map(object({
+    name = optional(string, null)
+    logs = optional(set(object({
+      category       = optional(string, null)
+      category_group = optional(string, null)
+      enabled        = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
+    metrics = optional(set(object({
+      category = optional(string, null)
+      enabled  = optional(bool, true)
+      retention_policy = optional(object({
+        days    = optional(number, 0)
+        enabled = optional(bool, false)
+      }), {})
+    })), [])
+    log_analytics_destination_type           = optional(string, "Dedicated")
+    workspace_resource_id                    = optional(string, null)
+    storage_account_resource_id              = optional(string, null)
+    event_hub_authorization_rule_resource_id = optional(string, null)
+    event_hub_name                           = optional(string, null)
+    marketplace_partner_resource_id          = optional(string, null)
+  }))
+```
+
+Default: `{}`
 
 ### <a name="input_enable_telemetry"></a> [enable\_telemetry](#input\_enable\_telemetry)
 
@@ -67,31 +115,176 @@ Default: `true`
 
 ### <a name="input_ignore_body_changes"></a> [ignore\_body\_changes](#input\_ignore\_body\_changes)
 
-Description: Body paths, in dot notation, whose changes made outside Terraform are ignored for each AzAPI resource. Changes to this value take effect after the next apply.
-
-- `network_virtual_networks` - (Optional) Paths to ignore on the virtual network, for example `properties.dhcpOptions`.
+Description: Body-relative property paths to ignore for each AzAPI resource type. Paths use dot notation; changes to this provider-private setting take effect only after apply.
 
 Type:
 
 ```hcl
 object({
-    network_virtual_networks = optional(list(string), [])
+    authorization_locks                               = optional(list(string), [])
+    authorization_role_assignments                    = optional(list(string), [])
+    insights_diagnostic_settings                      = optional(list(string), [])
+    network_private_endpoints                         = optional(list(string), [])
+    network_private_endpoints_private_dns_zone_groups = optional(list(string), [])
+    purview_accounts                                  = optional(list(string), [])
   })
 ```
 
 Default: `{}`
 
-### <a name="input_resource_types"></a> [resource\_types](#input\_resource\_types)
+### <a name="input_lock"></a> [lock](#input\_lock)
 
-Description: The AzAPI resource type and API version used for each resource.
+Description: Controls the Resource Lock configuration for this resource. The following properties can be specified:
 
-- `network_virtual_networks` - (Optional) The virtual network type. Defaults to `Microsoft.Network/virtualNetworks@2024-07-01`.
+- `kind` - (Required) The type of lock. Possible values are `\"CanNotDelete\"` and `\"ReadOnly\"`.
+- `name` - (Optional) The name of the lock. If not specified, a name will be generated based on the `kind` value. Changing this forces the creation of a new resource.
+- `notes` - (Optional) Notes about the lock. If not specified, a default note will be generated based on the `kind` value.
 
 Type:
 
 ```hcl
 object({
-    network_virtual_networks = optional(string, "Microsoft.Network/virtualNetworks@2024-07-01")
+    kind  = string
+    name  = optional(string, null)
+    notes = optional(string, null)
+  })
+```
+
+Default: `null`
+
+### <a name="input_managed_event_hub_state"></a> [managed\_event\_hub\_state](#input\_managed\_event\_hub\_state)
+
+Description: The managed event hub state for the Microsoft Purview account.
+
+Type: `string`
+
+Default: `"Disabled"`
+
+### <a name="input_managed_identities"></a> [managed\_identities](#input\_managed\_identities)
+
+Description: Controls the Managed Identity configuration on this resource. The following properties can be specified:
+
+- `system_assigned` - (Optional) Specifies if the System Assigned Managed Identity should be enabled.
+- `user_assigned_resource_ids` - (Optional) Specifies a list of User Assigned Managed Identity resource IDs to be assigned to this resource.
+
+Type:
+
+```hcl
+object({
+    system_assigned            = optional(bool, false)
+    user_assigned_resource_ids = optional(set(string), [])
+  })
+```
+
+Default: `{}`
+
+### <a name="input_managed_resource_group_name"></a> [managed\_resource\_group\_name](#input\_managed\_resource\_group\_name)
+
+Description: The name of the managed resource group used by the Microsoft Purview account. If unset, Azure generates one.
+
+Type: `string`
+
+Default: `null`
+
+### <a name="input_managed_resources_public_network_access"></a> [managed\_resources\_public\_network\_access](#input\_managed\_resources\_public\_network\_access)
+
+Description: The public network access setting for managed resources created by the Microsoft Purview account.
+
+Type: `string`
+
+Default: `"NotSpecified"`
+
+### <a name="input_private_endpoints"></a> [private\_endpoints](#input\_private\_endpoints)
+
+Description: A map of private endpoints to create on this resource. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+
+- `name` - (Optional) The name of the private endpoint. One will be generated if not set.
+- `role_assignments` - (Optional) A map of role assignments to create on the private endpoint. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time. See `var.role_assignments` for more information.
+- `lock` - (Optional) The lock level to apply to the private endpoint. Default is `None`. Possible values are `None`, `CanNotDelete`, and `ReadOnly`.
+- `tags` - (Optional) A mapping of tags to assign to the private endpoint.
+- `subnet_resource_id` - The resource ID of the subnet to deploy the private endpoint in.
+- `private_dns_zone_group_name` - (Optional) The name of the private DNS zone group. One will be generated if not set.
+- `private_dns_zone_resource_ids` - (Optional) A set of resource IDs of private DNS zones to associate with the private endpoint. If not set, no zone groups will be created and the private endpoint will not be associated with any private DNS zones. DNS records must be managed external to this module.
+- `application_security_group_resource_ids` - (Optional) A map of resource IDs of application security groups to associate with the private endpoint. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+- `private_service_connection_name` - (Optional) The name of the private service connection. One will be generated if not set.
+- `network_interface_name` - (Optional) The name of the network interface. One will be generated if not set.
+- `location` - (Optional) The Azure location where the resources will be deployed. Defaults to the location of the resource group.
+- `resource_group_name` - (Optional) The resource group where the resources will be deployed. Defaults to the resource group of this resource.
+- `ip_configurations` - (Optional) A map of IP configurations to create on the private endpoint. If not specified the platform will create one. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+  - `name` - The name of the IP configuration.
+  - `private_ip_address` - The private IP address of the IP configuration.
+
+Type:
+
+```hcl
+map(object({
+    name = optional(string, null)
+    role_assignments = optional(map(object({
+      name                                   = optional(string, null)
+      role_definition_id_or_name             = string
+      principal_id                           = string
+      description                            = optional(string, null)
+      skip_service_principal_aad_check       = optional(bool, false)
+      condition                              = optional(string, null)
+      condition_version                      = optional(string, null)
+      delegated_managed_identity_resource_id = optional(string, null)
+      principal_type                         = optional(string, null)
+    })), {})
+    lock = optional(object({
+      kind  = string
+      name  = optional(string, null)
+      notes = optional(string, null)
+    }), null)
+    tags                                    = optional(map(string), null)
+    subnet_resource_id                      = string
+    subresource_name                        = optional(string, null)
+    private_dns_zone_group_name             = optional(string, "default")
+    private_dns_zone_resource_ids           = optional(set(string), [])
+    application_security_group_associations = optional(map(string), {})
+    private_service_connection_name         = optional(string, null)
+    network_interface_name                  = optional(string, null)
+    location                                = optional(string, null)
+    resource_group_name                     = optional(string, null)
+    ip_configurations = optional(map(object({
+      name               = string
+      private_ip_address = string
+      member_name        = optional(string)
+    })), {})
+  }))
+```
+
+Default: `{}`
+
+### <a name="input_private_endpoints_manage_dns_zone_group"></a> [private\_endpoints\_manage\_dns\_zone\_group](#input\_private\_endpoints\_manage\_dns\_zone\_group)
+
+Description: Whether to manage private DNS zone groups with this module. If set to false, you must manage private DNS zone groups externally, e.g. using Azure Policy.
+
+Type: `bool`
+
+Default: `true`
+
+### <a name="input_public_network_access"></a> [public\_network\_access](#input\_public\_network\_access)
+
+Description: The public network access setting for the Microsoft Purview account.
+
+Type: `string`
+
+Default: `"Enabled"`
+
+### <a name="input_resource_types"></a> [resource\_types](#input\_resource\_types)
+
+Description: The Azure resource types and API versions used by this module's AzAPI resources.
+
+Type:
+
+```hcl
+object({
+    authorization_locks                               = optional(string, "Microsoft.Authorization/locks@2020-05-01")
+    authorization_role_assignments                    = optional(string, "Microsoft.Authorization/roleAssignments@2022-04-01")
+    insights_diagnostic_settings                      = optional(string, "Microsoft.Insights/diagnosticSettings@2021-05-01-preview")
+    network_private_endpoints                         = optional(string, "Microsoft.Network/privateEndpoints@2024-05-01")
+    network_private_endpoints_private_dns_zone_groups = optional(string, "Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01")
+    purview_accounts                                  = optional(string, "Microsoft.Purview/accounts@2021-12-01")
   })
 ```
 
@@ -99,11 +292,7 @@ Default: `{}`
 
 ### <a name="input_retry"></a> [retry](#input\_retry)
 
-Description: Retry configuration applied to every AzAPI resource in the module. Defaults to `null` (no custom retry).
-
-- `error_message_regex` - (Optional) Regular expressions matching error messages that trigger a retry.
-- `interval_seconds` - (Optional) Initial interval between retries, in seconds.
-- `max_interval_seconds` - (Optional) Maximum interval between retries, in seconds.
+Description: The retry configuration to apply to AzAPI resources.
 
 Type:
 
@@ -117,9 +306,42 @@ object({
 
 Default: `null`
 
+### <a name="input_role_assignments"></a> [role\_assignments](#input\_role\_assignments)
+
+Description: A map of role assignments to create on this resource. The map key is deliberately arbitrary to avoid issues where map keys maybe unknown at plan time.
+
+- `role_definition_id_or_name` - The ID or name of the role definition to assign to the principal.
+- `principal_id` - The ID of the principal to assign the role to.
+- `description` - The description of the role assignment.
+- `skip_service_principal_aad_check` - If set to true, skips the Azure Active Directory check for the service principal in the tenant. Defaults to false.
+- `condition` - The condition which will be used to scope the role assignment.
+- `condition_version` - The version of the condition syntax. Valid values are '2.0'.
+- `delegated_managed_identity_resource_id` - The delegated Azure Resource Id which contains a Managed Identity. Changing this forces a new resource to be created.
+- `principal_type` - The type of the principal\_id. Possible values are `User`, `Group` and `ServicePrincipal`. Changing this forces a new resource to be created. It is necessary to explicitly set this attribute when creating role assignments if the principal creating the assignment is constrained by ABAC rules that filters on the PrincipalType attribute.
+
+> Note: only set `skip_service_principal_aad_check` to true if you are assigning a role to a service principal.
+
+Type:
+
+```hcl
+map(object({
+    name                                   = optional(string, null)
+    role_definition_id_or_name             = string
+    principal_id                           = string
+    description                            = optional(string, null)
+    skip_service_principal_aad_check       = optional(bool, false)
+    condition                              = optional(string, null)
+    condition_version                      = optional(string, null)
+    delegated_managed_identity_resource_id = optional(string, null)
+    principal_type                         = optional(string, null)
+  }))
+```
+
+Default: `{}`
+
 ### <a name="input_tags"></a> [tags](#input\_tags)
 
-Description: A map of tags to assign to the virtual network.
+Description: (Optional) Tags of the resource.
 
 Type: `map(string)`
 
@@ -127,21 +349,16 @@ Default: `null`
 
 ### <a name="input_timeouts"></a> [timeouts](#input\_timeouts)
 
-Description: Operation timeouts applied to every AzAPI resource in the module, as duration strings such as `30m`. Defaults to `null` (provider defaults).
-
-- `create` - (Optional) Timeout for create operations.
-- `read` - (Optional) Timeout for read operations.
-- `update` - (Optional) Timeout for update operations.
-- `delete` - (Optional) Timeout for delete operations.
+Description: The timeout configuration to apply to AzAPI resources.
 
 Type:
 
 ```hcl
 object({
     create = optional(string)
+    delete = optional(string)
     read   = optional(string)
     update = optional(string)
-    delete = optional(string)
   })
 ```
 
@@ -153,15 +370,25 @@ The following outputs are exported:
 
 ### <a name="output_name"></a> [name](#output\_name)
 
-Description: The name of the virtual network.
+Description: The name of the Microsoft Purview account.
+
+### <a name="output_private_endpoints"></a> [private\_endpoints](#output\_private\_endpoints)
+
+Description:   A map of the private endpoint resource IDs created.
 
 ### <a name="output_resource_id"></a> [resource\_id](#output\_resource\_id)
 
-Description: The resource ID of the virtual network.
+Description: The resource ID of the Microsoft Purview account.
 
 ## Modules
 
-No modules.
+The following Modules are called:
+
+### <a name="module_avm_interfaces"></a> [avm\_interfaces](#module\_avm\_interfaces)
+
+Source: Azure/avm-utl-interfaces/azure
+
+Version: 0.9.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection
